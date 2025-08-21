@@ -1,0 +1,98 @@
+#include "pch.h"
+#include "route_checker.h"
+#include <memory>
+#include <algorithm>
+#include <execution>
+
+#include "../utils.h"
+#include <winsock2.h>
+#include <ws2ipdef.h>
+#include <WS2tcpip.h>
+#include <iphlpapi.h>
+
+#pragma comment(lib, "iphlpapi.lib")
+
+namespace netcure::checkers {
+	namespace {
+		auto _get_route_table(ADDRESS_FAMILY family = AF_UNSPEC) {
+			struct route_table_deleter {
+				void operator()(MIB_IPFORWARD_TABLE2* ptr) const {
+					FreeMibTable(ptr);
+				}
+			};
+			MIB_IPFORWARD_TABLE2* p_table = nullptr;
+			auto rc = GetIpForwardTable2(family, &p_table);
+			if (rc != NO_ERROR) {
+				throw std::runtime_error(std::format("GetIpForwardTable2 failed with error code: {}", rc));
+			}
+			return std::unique_ptr<MIB_IPFORWARD_TABLE2, route_table_deleter>(p_table);
+		}
+
+		std::string _get_interface_alias(const NET_LUID* luid) {
+			int buflen = 128;
+			
+			for (int i = 0; i < 3; i++) { // 3 tries max
+				auto* str = new wchar_t[buflen];
+				auto rc = ConvertInterfaceLuidToAlias(luid, str, buflen);
+				if (rc == NO_ERROR) {
+					std::wstring alias(str);
+					delete[] str;
+					return utils::to_string(alias);
+				} else if (rc == ERROR_INSUFFICIENT_BUFFER) {
+					delete[] str;
+					buflen *= 2; // Double the buffer size
+				} else {
+					delete[] str;
+					throw std::runtime_error(std::format("ConvertInterfaceLuidToAlias failed with error code: {}", rc));
+				}
+			}
+			throw std::runtime_error("Failed to allocate memory for ConvertInterfaceLuidToAlias: too much memory requested");
+		}
+	}
+	void route_checker::run(checker_context& ctx) {
+		auto v4table = _get_route_table(AF_INET);
+		auto v6table = _get_route_table(AF_INET6);
+
+		for (ULONG i = 0; i < v4table->NumEntries; i++) {
+			const auto* entry = &v4table->Table[i];
+			char addr_buf[64] = { 0 };
+			ctx.result.route4_table.emplace_back(utils::route_entry{
+				.destination = utils::cidr(std::format("{}/{}", inet_ntop(AF_INET, &entry->DestinationPrefix.Prefix.Ipv4.sin_addr, addr_buf, sizeof(addr_buf)), entry->DestinationPrefix.PrefixLength)),
+				.next_hop = std::make_unique<utils::ipv4_addr>(inet_ntop(AF_INET, &entry->NextHop.Ipv4.sin_addr, addr_buf, sizeof(addr_buf))),
+				.interface = _get_interface_alias(&entry->InterfaceLuid),
+				.metric = entry->Metric
+			});
+		}
+
+		for (ULONG i = 0; i < v6table->NumEntries; i++) {
+			const auto* entry = &v6table->Table[i];
+			char addr_buf[64] = { 0 };
+			ctx.result.route6_table.emplace_back(utils::route_entry{
+				.destination = utils::cidr(std::format("{}/{}", inet_ntop(AF_INET6, &entry->DestinationPrefix.Prefix.Ipv6.sin6_addr, addr_buf, sizeof(addr_buf)), entry->DestinationPrefix.PrefixLength)),
+				.next_hop = std::make_unique<utils::ipv6_addr>(inet_ntop(AF_INET6, &entry->NextHop.Ipv6.sin6_addr, addr_buf, sizeof(addr_buf))),
+				.interface = _get_interface_alias(&entry->InterfaceLuid),
+				.metric = entry->Metric
+			});
+		}
+
+		if (!std::any_of(std::execution::par_unseq, ctx.result.route4_table.begin(), ctx.result.route4_table.end(), [](const utils::route_entry& entry) {
+			return entry.destination.prefix_length == 0;
+		})) {
+			ctx.result.messages.emplace_back(checker_message{
+				.level = severity::error,
+				.title = "Missing IPv4 default route",
+				.description = "You don't have an IPv4 default route, this may indicate not having an IPv4 address in your network interface. This may be caused by DHCP service error, network configuration error, or network card failure."
+			});
+		}
+
+		if (!std::any_of(std::execution::par_unseq, ctx.result.route6_table.begin(), ctx.result.route6_table.end(), [](const utils::route_entry& entry) {
+			return entry.destination.prefix_length == 0;
+		})) {
+			ctx.result.messages.emplace_back(checker_message{
+				.level = severity::warning,
+				.title = "Missing IPv6 default route",
+				.description = "You don't have an IPv6 default route, this may indicate not having an IPv6 address in your network interface. This is possibly caused by network configuration error or environment limitations."
+			});
+		}
+	}
+}
