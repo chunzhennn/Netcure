@@ -51,8 +51,8 @@ namespace netcure::checkers {
 		for (const auto* current = addresses.get(); current; current = current->Next) {
 			// We use friendly name instead of adapter name
 			std::wstring adapter_name = current->FriendlyName ? current->FriendlyName : L"Unknown";
-			std::vector<utils::cidr> ipv4_addresses;
-			std::vector<utils::cidr> ipv6_addresses;
+			std::vector<utils::cidr<utils::ipv4_addr>> ipv4_addresses;
+			std::vector<utils::cidr<utils::ipv6_addr>> ipv6_addresses;
 			std::vector<utils::ipv4_addr> dns4_addresses;
 			std::vector<utils::ipv6_addr> dns6_addresses;
 			std::vector<utils::ipv4_addr> gateway4_addresses;
@@ -68,13 +68,13 @@ namespace netcure::checkers {
 					auto* v4str = inet_ntop(AF_INET, &v4addr->sin_addr, addr_buf, sizeof(addr_buf));
 					if (v4str == nullptr)
 						continue;
-					ipv4_addresses.emplace_back(std::make_unique<utils::ipv4_addr>(v4str), addr->OnLinkPrefixLength);
+					ipv4_addresses.emplace_back(utils::ipv4_addr{ v4str }, addr->OnLinkPrefixLength);
 				} else if (addr->Address.lpSockaddr->sa_family == AF_INET6) {
 					auto* v6addr = reinterpret_cast<sockaddr_in6*>(addr->Address.lpSockaddr);
 					auto* v6str = inet_ntop(AF_INET6, &v6addr->sin6_addr, addr_buf, sizeof(addr_buf));
 					if (v6str == nullptr)
 						continue;
-					ipv6_addresses.emplace_back(std::make_unique<utils::ipv6_addr>(v6str), addr->OnLinkPrefixLength);
+					ipv6_addresses.emplace_back(utils::ipv6_addr{ v6str }, addr->OnLinkPrefixLength);
 				}
 			}
 			
@@ -116,6 +116,7 @@ namespace netcure::checkers {
 			}
 
 			ctx.result.network_interfaces.emplace_back(utils::network_interface{
+				.id = current->Luid,
 				.name = utils::to_string(adapter_name),
 				.mac_address = utils::mac(std::string_view(reinterpret_cast<const char*>(&current->PhysicalAddress), current->PhysicalAddressLength)),
 				.up = (current->OperStatus == IfOperStatusUp),

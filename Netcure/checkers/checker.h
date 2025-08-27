@@ -29,8 +29,8 @@ namespace netcure::checkers {
 	struct checker_result {
 		std::vector<utils::network_interface> network_interfaces;
 		std::vector<checker_message> messages;
-		std::vector<utils::route_entry> route4_table;
-		std::vector<utils::route_entry> route6_table;
+		std::vector<utils::route_entry<utils::ipv4_addr>> route4_table;
+		std::vector<utils::route_entry<utils::ipv6_addr>> route6_table;
 	};
 
 	struct checker_context {

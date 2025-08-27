@@ -3,6 +3,7 @@
 #include <memory>
 #include <algorithm>
 #include <execution>
+#include <string>
 
 #include "../utils.h"
 #include <winsock2.h>
@@ -56,9 +57,12 @@ namespace netcure::checkers {
 		for (ULONG i = 0; i < v4table->NumEntries; i++) {
 			const auto* entry = &v4table->Table[i];
 			char addr_buf[64] = { 0 };
-			ctx.result.route4_table.emplace_back(utils::route_entry{
-				.destination = utils::cidr(std::format("{}/{}", inet_ntop(AF_INET, &entry->DestinationPrefix.Prefix.Ipv4.sin_addr, addr_buf, sizeof(addr_buf)), entry->DestinationPrefix.PrefixLength)),
-				.next_hop = std::make_unique<utils::ipv4_addr>(inet_ntop(AF_INET, &entry->NextHop.Ipv4.sin_addr, addr_buf, sizeof(addr_buf))),
+			auto v4dest = utils::ipv4_addr{ inet_ntop(AF_INET, &entry->DestinationPrefix.Prefix.Ipv4.sin_addr, addr_buf, sizeof(addr_buf)) };
+			auto destination = utils::cidr<utils::ipv4_addr>{std::move(v4dest), entry->DestinationPrefix.PrefixLength};
+			auto v4nexthop = utils::ipv4_addr{ inet_ntop(AF_INET, &entry->NextHop.Ipv4.sin_addr, addr_buf, sizeof(addr_buf)) };
+			ctx.result.route4_table.emplace_back(utils::route_entry<utils::ipv4_addr>{
+				.destination = std::move(destination),
+				.next_hop = std::move(v4nexthop),
 				.interface = _get_interface_alias(&entry->InterfaceLuid),
 				.metric = entry->Metric
 			});
@@ -67,15 +71,19 @@ namespace netcure::checkers {
 		for (ULONG i = 0; i < v6table->NumEntries; i++) {
 			const auto* entry = &v6table->Table[i];
 			char addr_buf[64] = { 0 };
-			ctx.result.route6_table.emplace_back(utils::route_entry{
-				.destination = utils::cidr(std::format("{}/{}", inet_ntop(AF_INET6, &entry->DestinationPrefix.Prefix.Ipv6.sin6_addr, addr_buf, sizeof(addr_buf)), entry->DestinationPrefix.PrefixLength)),
-				.next_hop = std::make_unique<utils::ipv6_addr>(inet_ntop(AF_INET6, &entry->NextHop.Ipv6.sin6_addr, addr_buf, sizeof(addr_buf))),
+			auto v6dest = utils::ipv6_addr{ inet_ntop(AF_INET6, &entry->DestinationPrefix.Prefix.Ipv6.sin6_addr, addr_buf, sizeof(addr_buf)) };
+			auto destination = utils::cidr<utils::ipv6_addr>{ std::move(v6dest), entry->DestinationPrefix.PrefixLength };
+			auto v6nexthop = utils::ipv6_addr{ inet_ntop(AF_INET6, &entry->NextHop.Ipv6.sin6_addr, addr_buf, sizeof(addr_buf)) };
+			ctx.result.route6_table.emplace_back(utils::route_entry<utils::ipv6_addr>{
+				.destination = std::move(destination),
+				.next_hop =  std::move(v6nexthop),
 				.interface = _get_interface_alias(&entry->InterfaceLuid),
+				.interface_id = entry->InterfaceLuid,
 				.metric = entry->Metric
 			});
 		}
 
-		if (!std::any_of(std::execution::par_unseq, ctx.result.route4_table.begin(), ctx.result.route4_table.end(), [](const utils::route_entry& entry) {
+		if (!std::any_of(std::execution::par_unseq, ctx.result.route4_table.begin(), ctx.result.route4_table.end(), [](const auto& entry) {
 			return entry.destination.prefix_length == 0;
 		})) {
 			ctx.result.messages.emplace_back(checker_message{
@@ -85,7 +93,7 @@ namespace netcure::checkers {
 			});
 		}
 
-		if (!std::any_of(std::execution::par_unseq, ctx.result.route6_table.begin(), ctx.result.route6_table.end(), [](const utils::route_entry& entry) {
+		if (!std::any_of(std::execution::par_unseq, ctx.result.route6_table.begin(), ctx.result.route6_table.end(), [](const auto& entry) {
 			return entry.destination.prefix_length == 0;
 		})) {
 			ctx.result.messages.emplace_back(checker_message{

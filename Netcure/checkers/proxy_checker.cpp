@@ -29,14 +29,24 @@ namespace netcure::checkers {
 
         // check TUN proxy
 		auto default_route4 = ctx.result.route4_table
-			| std::views::filter([](const utils::route_entry& r) { return r.destination.prefix_length == 0; });
-		auto default_entry4 = std::ranges::min_element(default_route4, [](const utils::route_entry& a, const utils::route_entry& b) {
+			| std::views::filter([](const utils::route_entry<utils::ipv4_addr>& r) { return r.destination.prefix_length == 0; });
+		auto default_entry4 = std::ranges::min_element(default_route4, [](const auto& a, const auto& b) {
 			return a.metric < b.metric;
 		});
 		if (default_entry4 != default_route4.end()) {
-			const auto& interface = std::find(std::execution::par_unseq, ctx.result.network_interfaces.begin(), ctx.result.network_interfaces.end(), [](const utils::network_interface& interface) {
-				return interface.ipv4_addresses
-			})
+			const auto& iface = std::find(ctx.result.network_interfaces.begin(), ctx.result.network_interfaces.end(), [&](const auto& iface) {
+				return iface.Luid == default_entry4->interface_id;
+			});
+			if (iface == ctx.result.network_interfaces.end()) {
+				throw std::runtime_error("Your default route points to a non-existant network interface");
+			}
+			if (iface->is_virtual()) {
+				ctx.result.messages.emplace_back(checker_message{
+					.level = severity::warning,
+					.title = "TUN Proxy Detected",
+					.description = "You have enabled TUN proxy, results could be terrible wrong!"
+				});
+			}
 		}
 
 	}

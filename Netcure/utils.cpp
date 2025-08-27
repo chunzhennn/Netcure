@@ -142,61 +142,6 @@ namespace netcure::utils {
 		return to_string();
 	}
 
-	std::unique_ptr<ip_addr> parse_ip(std::string_view addr) {
-		if (addr.contains(':')) {
-			return std::make_unique<ipv6_addr>(addr);
-		} else {
-			return std::make_unique<ipv4_addr>(addr);
-		}
-	}
-
-	cidr::cidr(std::string_view cidr_str) {
-		auto pos = cidr_str.find('/');
-		if (pos == std::string_view::npos) {
-			throw std::invalid_argument("Invalid CIDR format");
-		}
-		addr = parse_ip(cidr_str.substr(0, pos));
-		if (auto result = std::from_chars(cidr_str.data() + pos + 1, cidr_str.data() + cidr_str.size(), prefix_length); result.ec != std::errc() || result.ptr != cidr_str.data() + cidr_str.size()) {
-			throw std::invalid_argument("Invalid CIDR prefix length");
-		}
-	}
-
-	cidr::cidr(std::unique_ptr<ip_addr> ipaddr, uint8_t prefix_length)
-		: addr(std::move(ipaddr)), prefix_length(prefix_length) {
-		if (dynamic_cast<ipv4_addr*>(addr.get()) && prefix_length > 32) {
-			throw std::invalid_argument("CIDR prefix length for IPv4 must be between 0 and 32");
-		} else if (prefix_length > 128) {
-			throw std::invalid_argument("CIDR prefix length for IPv6 must be between 0 and 128");
-		}
-	}
-
-	std::string cidr::to_string() const {
-		return std::format("{}/{}", addr->to_string(), prefix_length);
-	}
-
-	cidr::operator std::string() const {
-		return to_string();
-	}
-
-	bool cidr::contains(const ip_addr* ip) const {
-		if (!ip) {
-			return false;
-		}
-		// TODO
-		if (const auto* v4addr = dynamic_cast<const ipv4_addr*>(ip)) {
-			if (const auto* v4cidr = dynamic_cast<const ipv4_addr*>(addr.get())) {
-				
-			}
-			return false;
-		} else if (const auto* v6addr = dynamic_cast<const ipv6_addr*>(ip)) {
-			if (const auto* v6cidr = dynamic_cast<const ipv6_addr*>(addr.get())) {
-				
-			}
-			return false;
-		}
-		return false;
-	}
-
 	mac::mac(std::string_view mac_bytes) {
 		if (mac_bytes.size() != 0)
 			addr_ = std::string(mac_bytes);
@@ -223,6 +168,13 @@ namespace netcure::utils {
 		return addr_.empty() || std::all_of(addr_.begin(), addr_.end(), [](char c) {
 			return c == 0;
 		});
+	}
+
+	bool network_interface::is_virtual() const {
+		if (mac_address.empty())
+			return true;
+		// TODO: Make this check more reliable
+		return false;
 	}
 
 	std::string to_string(const std::wstring& str) {
