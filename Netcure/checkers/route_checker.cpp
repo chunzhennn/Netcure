@@ -64,6 +64,7 @@ namespace netcure::checkers {
 				.destination = std::move(destination),
 				.next_hop = std::move(v4nexthop),
 				.interface = _get_interface_alias(&entry->InterfaceLuid),
+             .interface_id = entry->InterfaceLuid,
 				.metric = entry->Metric
 			});
 		}

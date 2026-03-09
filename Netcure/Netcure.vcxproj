@@ -107,6 +107,7 @@
     <ClInclude Include="checkers\checker.h" />
     <ClInclude Include="checkers\proxy_checker.h" />
     <ClInclude Include="checkers\route_checker.h" />
+    <ClInclude Include="checkers\wifi_checker.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>
@@ -114,6 +115,7 @@
     <ClCompile Include="checkers\adapter_checker.cpp" />
     <ClCompile Include="checkers\proxy_checker.cpp" />
     <ClCompile Include="checkers\route_checker.cpp" />
+    <ClCompile Include="checkers\wifi_checker.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
