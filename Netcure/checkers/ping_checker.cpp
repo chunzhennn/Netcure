@@ -90,6 +90,7 @@ namespace netcure::checkers {
 			constexpr std::array<char, 8> payload{ 'N', 'e', 't', 'c', 'u', 'r', 'e', '\0' };
 			std::vector<std::byte> reply_buffer(sizeof(ICMP_ECHO_REPLY) + payload.size() + 16);
 			IP_OPTION_INFORMATION options{};
+			options.Ttl = 128;
 
 			const auto reply_count = IcmpSendEcho(
 				handle,
