@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <execution>
 #include <string>
+#include <unordered_map>
 
 #include "../utils.h"
 #include <winsock2.h>
@@ -49,10 +50,32 @@ namespace netcure::checkers {
 			}
 			throw std::runtime_error("Failed to allocate memory for ConvertInterfaceLuidToAlias: too much memory requested");
 		}
+
+		ULONG _get_effective_route_metric(const ADDRESS_FAMILY family, const MIB_IPFORWARD_ROW2& route_entry, std::unordered_map<ULONGLONG, ULONG>& interface_metric_cache) {
+			const auto interface_key = route_entry.InterfaceLuid.Value;
+			if (const auto cached = interface_metric_cache.find(interface_key); cached != interface_metric_cache.end()) {
+				return route_entry.Metric + cached->second;
+			}
+
+			MIB_IPINTERFACE_ROW interface_row{};
+			InitializeIpInterfaceEntry(&interface_row);
+			interface_row.Family = family;
+			interface_row.InterfaceLuid = route_entry.InterfaceLuid;
+
+			const auto rc = GetIpInterfaceEntry(&interface_row);
+			if (rc != NO_ERROR) {
+				throw std::runtime_error(std::format("GetIpInterfaceEntry failed with error code: {}", rc));
+			}
+
+			interface_metric_cache.emplace(interface_key, interface_row.Metric);
+			return route_entry.Metric + interface_row.Metric;
+		}
 	}
 	void route_checker::run(checker_context& ctx) {
 		auto v4table = _get_route_table(AF_INET);
 		auto v6table = _get_route_table(AF_INET6);
+		std::unordered_map<ULONGLONG, ULONG> v4_interface_metric_cache;
+		std::unordered_map<ULONGLONG, ULONG> v6_interface_metric_cache;
 
 		for (ULONG i = 0; i < v4table->NumEntries; i++) {
 			const auto* entry = &v4table->Table[i];
@@ -65,7 +88,7 @@ namespace netcure::checkers {
 				.next_hop = std::move(v4nexthop),
 				.interface = _get_interface_alias(&entry->InterfaceLuid),
              .interface_id = entry->InterfaceLuid,
-				.metric = entry->Metric
+				.metric = _get_effective_route_metric(AF_INET, *entry, v4_interface_metric_cache)
 			});
 		}
 
@@ -80,7 +103,7 @@ namespace netcure::checkers {
 				.next_hop =  std::move(v6nexthop),
 				.interface = _get_interface_alias(&entry->InterfaceLuid),
 				.interface_id = entry->InterfaceLuid,
-				.metric = entry->Metric
+				.metric = _get_effective_route_metric(AF_INET6, *entry, v6_interface_metric_cache)
 			});
 		}
 
