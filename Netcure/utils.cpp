@@ -7,6 +7,7 @@
 #include <sstream>
 #include <Windows.h>
 #include <algorithm>
+#include <array>
 
 namespace netcure::utils {
 
@@ -171,9 +172,71 @@ namespace netcure::utils {
 	}
 
 	bool network_interface::is_virtual() const {
-		if (mac_address.empty())
+		if (mac_address.empty()) {
 			return true;
-		// TODO: Make this check more reliable
+		}
+
+		auto normalized_name = name;
+		std::transform(normalized_name.begin(), normalized_name.end(), normalized_name.begin(), [](unsigned char ch) {
+			return static_cast<char>(std::tolower(ch));
+		});
+
+		constexpr std::array<std::string_view, 14> virtual_name_keywords{
+			"virtual",
+			"vmware",
+			"virtualbox",
+			"hyper-v",
+			"vethernet",
+			"loopback",
+			"tailscale",
+			"zerotier",
+			"wireguard",
+			"openvpn",
+			"tap-",
+			"tap ",
+			"tun",
+			"mihomo"
+		};
+		if (std::ranges::any_of(virtual_name_keywords, [&](const std::string_view keyword) {
+			return normalized_name.find(keyword) != std::string::npos;
+		})) {
+			return true;
+		}
+
+		auto mac_text = mac_address.to_string();
+		mac_text.erase(std::remove(mac_text.begin(), mac_text.end(), ':'), mac_text.end());
+		if (mac_text.size() < 6) {
+			return false;
+		}
+
+		std::transform(mac_text.begin(), mac_text.end(), mac_text.begin(), [](unsigned char ch) {
+			return static_cast<char>(std::tolower(ch));
+		});
+
+		const auto oui = mac_text.substr(0, 6);
+		constexpr std::array<std::string_view, 9> virtual_ouis{
+			"000569", // VMware
+			"000c29", // VMware
+			"001c14", // VMware
+			"005056", // VMware
+			"00155d", // Hyper-V
+			"080027", // VirtualBox
+			"00163e", // Xen
+			"001c42", // Parallels
+			"525400"  // QEMU/KVM
+		};
+		if (std::ranges::find(virtual_ouis, oui) != virtual_ouis.end()) {
+			return true;
+		}
+
+		// A locally administered MAC is often synthetic; use it as a weak signal.
+		unsigned int first_octet = 0;
+		if (std::from_chars(mac_text.data(), mac_text.data() + 2, first_octet, 16).ec == std::errc()) {
+			if ((first_octet & 0x02u) != 0u) {
+				return true;
+			}
+		}
+
 		return false;
 	}
 
