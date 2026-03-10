@@ -45,7 +45,7 @@ namespace netcure::checkers {
 				ctx.result.messages.emplace_back(checker_message{
 					.level = severity::warning,
 					.title = "TUN Proxy Detected",
-					.description = "You have enabled TUN proxy, results could be terrible wrong!"
+					.description = "Your active default route points to a virtual network adapter. This can happen when a TUN proxy is enabled, but it may also mean the system itself is running inside a virtual machine. In either case, network diagnostics may not reflect the physical host network accurately."
 				});
 			}
 		}
