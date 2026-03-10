@@ -188,16 +188,43 @@ namespace netcure::checkers {
 			return address == utils::ipv4_addr{};
 		}
 
+		const utils::network_interface* _find_interface(const checker_context& ctx, const if_id_type interface_id) {
+			const auto interface_it = std::find_if(
+				ctx.result.network_interfaces.begin(),
+				ctx.result.network_interfaces.end(),
+				[&](const auto& network_interface) {
+					return network_interface.id.Value == interface_id.Value;
+				}
+			);
+			return interface_it == ctx.result.network_interfaces.end() ? nullptr : &*interface_it;
+		}
+
 		std::vector<utils::ipv4_addr> _get_default_gateways(const checker_context& ctx) {
 			std::vector<utils::ipv4_addr> gateways;
+			const utils::route_entry<utils::ipv4_addr>* best_route = nullptr;
 			for (const auto& route : ctx.result.route4_table) {
 				if (route.destination.prefix_length != 0 || _is_unspecified_gateway(route.next_hop)) {
 					continue;
 				}
-				if (std::find(gateways.begin(), gateways.end(), route.next_hop) == gateways.end()) {
-					gateways.emplace_back(route.next_hop);
+
+				const auto* network_interface = _find_interface(ctx, route.interface_id);
+				if (network_interface == nullptr || !network_interface->up) {
+					continue;
+				}
+
+				if (
+					best_route == nullptr ||
+					route.metric < best_route->metric ||
+					(route.metric == best_route->metric && !network_interface->is_virtual())
+				) {
+					best_route = &route;
 				}
 			}
+
+			if (best_route != nullptr) {
+				gateways.emplace_back(best_route->next_hop);
+			}
+
 			return gateways;
 		}
 
