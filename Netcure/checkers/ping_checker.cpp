@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <format>
 #include <limits>
@@ -40,6 +41,7 @@ namespace netcure::checkers {
 			bool success = false;
 			bool timed_out = false;
 			uint32_t rtt_ms = 0;
+			std::optional<uint8_t> ttl;
 			DWORD status = IP_GENERAL_FAILURE;
 		};
 
@@ -110,6 +112,7 @@ namespace netcure::checkers {
 					.success = false,
 					.timed_out = status == IP_REQ_TIMED_OUT,
 					.rtt_ms = 0,
+					.ttl = std::nullopt,
 					.status = status
 				};
 			}
@@ -118,6 +121,7 @@ namespace netcure::checkers {
 				.success = reply->Status == IP_SUCCESS,
 				.timed_out = reply->Status == IP_REQ_TIMED_OUT,
 				.rtt_ms = reply->RoundTripTime,
+				.ttl = static_cast<uint8_t>(reply->Options.Ttl),
 				.status = reply->Status
 			};
 		}
@@ -142,6 +146,7 @@ namespace netcure::checkers {
 					.success = result.success,
 					.timed_out = result.timed_out,
 					.rtt_ms = result.success ? std::optional<uint32_t>{ result.rtt_ms } : std::nullopt,
+					.ttl = result.ttl,
 					.status_code = result.status,
 					.status = _status_to_string(result.status)
 				});

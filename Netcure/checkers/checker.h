@@ -12,6 +12,7 @@
 #include<optional>
 #include<chrono>
 #include<string_view>
+#include<cstdint>
 
 #include "../utils.h"
 
@@ -89,6 +90,7 @@ namespace netcure::checkers {
 		bool success = false;
 		bool timed_out = false;
 		std::optional<uint32_t> rtt_ms;
+		std::optional<uint8_t> ttl;
 		uint32_t status_code = 0;
 		std::string status;
 	};

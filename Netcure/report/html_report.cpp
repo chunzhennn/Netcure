@@ -188,6 +188,38 @@ namespace netcure::report {
 				 << "</div>";
 		}
 
+		std::string render_observed_ttls(const checkers::ping_target_report& report) {
+			std::vector<uint32_t> ttls;
+			for (const auto& attempt : report.attempt_details) {
+				if (attempt.ttl.has_value()) {
+					ttls.emplace_back(*attempt.ttl);
+				}
+			}
+
+			if (ttls.empty()) {
+				return "N/A";
+			}
+
+			std::ranges::sort(ttls);
+			ttls.erase(std::unique(ttls.begin(), ttls.end()), ttls.end());
+
+			std::ostringstream text;
+			for (size_t index = 0; index < ttls.size(); ++index) {
+				if (index > 0) {
+					text << ", ";
+				}
+				text << ttls[index];
+			}
+			return text.str();
+		}
+
+		std::string ttl_text(const std::optional<uint8_t>& ttl) {
+			if (!ttl.has_value()) {
+				return "N/A";
+			}
+			return std::format("{}", static_cast<uint32_t>(*ttl));
+		}
+
 		std::string render_ping_chart(const checkers::ping_target_report& report) {
 			if (report.attempt_details.empty()) {
 				return "<div class=\"empty-state\">No ping attempt details were captured.</div>";
@@ -259,13 +291,17 @@ namespace netcure::report {
 				if (attempt.rtt_ms.has_value()) {
 					const auto y = y_for(*attempt.rtt_ms);
 					svg << "<circle class=\"chart-point-success\" cx=\"" << x << "\" cy=\"" << y << "\" r=\"4\">"
-						<< "<title>Attempt " << attempt.sequence << ": " << *attempt.rtt_ms << " ms</title>"
+						<< "<title>Attempt " << attempt.sequence << ": " << *attempt.rtt_ms << " ms"
+						<< (attempt.ttl.has_value() ? std::format(", TTL {}", static_cast<uint32_t>(*attempt.ttl)) : "")
+						<< "</title>"
 						<< "</circle>";
 				} else {
 					const auto y = height - bottom - 4.0;
 					svg << "<circle class=\"" << (attempt.timed_out ? "chart-point-timeout" : "chart-point-failed")
 						<< "\" cx=\"" << x << "\" cy=\"" << y << "\" r=\"4\">"
-						<< "<title>Attempt " << attempt.sequence << ": " << html_escape(attempt.status) << "</title>"
+						<< "<title>Attempt " << attempt.sequence << ": " << html_escape(attempt.status)
+						<< (attempt.ttl.has_value() ? std::format(", TTL {}", static_cast<uint32_t>(*attempt.ttl)) : "")
+						<< "</title>"
 						<< "</circle>";
 				}
 			}
@@ -449,18 +485,20 @@ namespace netcure::report {
 					append_kv(html, "Max RTT", optional_number_text(target.max_rtt_ms, "{} ms"));
 					append_kv(html, "Avg RTT", optional_number_text(target.avg_rtt_ms, "{:.1f} ms"));
 					append_kv(html, "Jitter", optional_number_text(target.jitter_ms, "{:.1f} ms"));
+					append_kv(html, "Observed TTL", render_observed_ttls(target));
 					append_kv(html, "Last error", text_or_na(target.last_error));
 					html << "</div>"
 						 << "<div class=\"chart-wrap\">" << render_ping_chart(target) << "</div>"
 						 << "<details class=\"attempt-table\"><summary>Attempt details</summary>"
 						 << "<div class=\"table-wrap\"><table><thead><tr>"
-						 << "<th>#</th><th>Status</th><th>RTT</th><th>Timeout</th><th>Code</th>"
+						 << "<th>#</th><th>Status</th><th>RTT</th><th>TTL</th><th>Timeout</th><th>Code</th>"
 						 << "</tr></thead><tbody>";
 					for (const auto& attempt : target.attempt_details) {
 						html << "<tr>"
 							 << "<td>" << attempt.sequence << "</td>"
 							 << "<td>" << html_escape(text_or_na(attempt.status)) << "</td>"
 							 << "<td>" << html_escape(optional_number_text(attempt.rtt_ms, "{} ms")) << "</td>"
+							 << "<td>" << html_escape(ttl_text(attempt.ttl)) << "</td>"
 							 << "<td>" << html_escape(bool_text(attempt.timed_out)) << "</td>"
 							 << "<td>" << attempt.status_code << "</td>"
 							 << "</tr>";
