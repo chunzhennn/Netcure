@@ -28,6 +28,8 @@
 
 namespace netcure::checkers {
 	namespace {
+		constexpr auto wlan_scan_wait_timeout = std::chrono::seconds(10);
+
 		struct wlan_handle_deleter {
 			void operator()(HANDLE handle) const {
 				if (handle != nullptr) {
@@ -462,7 +464,7 @@ namespace netcure::checkers {
 			}
 
 			std::unique_lock lock(wait_context.mutex);
-			wait_context.condition.wait_for(lock, std::chrono::seconds(4), [&wait_context] {
+			wait_context.condition.wait_for(lock, wlan_scan_wait_timeout, [&wait_context] {
 				return wait_context.completed;
 			});
 			lock.unlock();
