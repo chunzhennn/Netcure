@@ -8,6 +8,10 @@ namespace netcure::checkers {
 	struct adapter_checker final: checker {
 		virtual ~adapter_checker() = default;
 
+		std::string_view name() const override {
+			return "Adapter check";
+		}
+
 		virtual bool available(const checker_context&) const {
 			return true;
 		}

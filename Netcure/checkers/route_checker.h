@@ -9,6 +9,9 @@
 namespace netcure::checkers {
 	struct route_checker final : checker {
 		virtual ~route_checker() = default;
+		std::string_view name() const override {
+			return "Route check";
+		}
 		virtual bool available(const checker_context& ctx) const {
 			// If there is no network interface that is up, we cannot check routes
 			return std::any_of(

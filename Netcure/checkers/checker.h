@@ -10,6 +10,8 @@
 #include<iostream>
 #include<concepts>
 #include<optional>
+#include<chrono>
+#include<string_view>
 
 #include "../utils.h"
 
@@ -128,6 +130,7 @@ namespace netcure::checkers {
 
 	struct checker {
 		virtual ~checker() = default;
+		virtual std::string_view name() const = 0;
 		virtual bool available(const checker_context&) const = 0;
 		virtual void run(checker_context&) = 0;
 	};
@@ -140,24 +143,38 @@ namespace netcure::checkers {
 		std::vector<std::unique_ptr<checker>> checkers;
 		(checkers.emplace_back(std::make_unique<Ts>()), ...);
 
+		std::cout << "Starting Netcure diagnostics..." << std::endl;
+
 		// Run each checker
-		for (auto& c : checkers) {
-			if (c->available(ctx)) {
-				try {
-					c->run(ctx);
-				}
-				catch (const std::exception& e) {
-					ctx.result.messages.emplace_back(
-						checker_message{
-							severity::error,
-							"Checker Error",
-							std::format("An error occurred while running {}: {}", typeid(*c).name(), e.what())
-						}
-					);
-					std::cerr << ctx.result.messages.back().description << std::endl;
-				}
+		for (size_t index = 0; index < checkers.size(); ++index) {
+			auto& c = checkers[index];
+			const auto checker_label = std::format("[{}/{}] {}", index + 1, checkers.size(), c->name());
+			if (!c->available(ctx)) {
+				std::cout << checker_label << ": skipped" << std::endl;
+				continue;
+			}
+
+			std::cout << checker_label << ": running..." << std::endl;
+			const auto started_at = std::chrono::steady_clock::now();
+			try {
+				c->run(ctx);
+				const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - started_at
+				);
+				std::cout << checker_label << ": completed in " << elapsed.count() << " ms" << std::endl;
+			}
+			catch (const std::exception& e) {
+				ctx.result.messages.emplace_back(
+					checker_message{
+						severity::error,
+						"Checker Error",
+						std::format("An error occurred while running {}: {}", c->name(), e.what())
+					}
+				);
+				std::cerr << checker_label << ": failed - " << e.what() << std::endl;
 			}
 		}
+		std::cout << "Diagnostics finished." << std::endl;
 		return std::move(ctx.result);
 	}
 }

@@ -7,6 +7,9 @@
 namespace netcure::checkers {
 	struct ping_checker final : checker {
 		~ping_checker() override = default;
+		std::string_view name() const override {
+			return "Ping check";
+		}
 		bool available(const checker_context& ctx) const override;
 		void run(checker_context& ctx) override;
 	};
