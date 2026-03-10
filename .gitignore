@@ -10,6 +10,7 @@
 *.userosscache
 *.sln.docstates
 *.env
+netcure-report.html
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

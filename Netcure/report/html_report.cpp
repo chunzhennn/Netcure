@@ -390,14 +390,14 @@ namespace netcure::report {
 					append_kv(html, "Failed TX", std::format("{}", wifi.connection.failed_tx_packets));
 					append_kv(html, "Nearby BSS", std::format("{}", wifi.connection.nearby_bss_count));
 					append_kv(html, "Same channel", std::format("{}", wifi.connection.same_channel_bss_count));
-					append_kv(html, "Adjacent channel", std::format("{}", wifi.connection.adjacent_channel_bss_count));
+					append_kv(html, "Overlapping BSS", std::format("{}", wifi.connection.overlapping_channel_bss_count));
 					html << "</div>";
 
 					if (wifi.nearby_networks.empty()) {
 						html << "<div class=\"empty-state\">No nearby networks were captured.</div>";
 					} else {
 						html << "<div class=\"table-wrap\"><table><thead><tr>"
-							 << "<th>SSID</th><th>BSSID</th><th>Signal</th><th>RSSI</th><th>Channel</th><th>Band</th><th>Security</th><th>Connectable</th>"
+							 << "<th>SSID</th><th>BSSID</th><th>Signal</th><th>RSSI</th><th>Channel</th><th>Width</th><th>Band</th><th>Security</th><th>Connectable</th>"
 							 << "</tr></thead><tbody>";
 						for (const auto& network : wifi.nearby_networks) {
 							html << "<tr>"
@@ -406,6 +406,7 @@ namespace netcure::report {
 								 << "<td>" << network.signal_quality << "%</td>"
 								 << "<td>" << html_escape(optional_number_text(network.rssi_dbm, "{} dBm")) << "</td>"
 								 << "<td>" << html_escape(optional_number_text(network.channel, "{}")) << "</td>"
+								 << "<td>" << html_escape(optional_number_text(network.channel_width_mhz, "{} MHz")) << "</td>"
 								 << "<td>" << html_escape(text_or_na(network.band)) << "</td>"
 								 << "<td>" << html_escape(bool_text(network.security_enabled, "Secured", "Open")) << "</td>"
 								 << "<td>" << html_escape(bool_text(network.connectable)) << "</td>"

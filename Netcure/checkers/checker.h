@@ -71,7 +71,7 @@ namespace netcure::checkers {
 		uint64_t failed_tx_packets = 0;
 		size_t nearby_bss_count = 0;
 		size_t same_channel_bss_count = 0;
-		size_t adjacent_channel_bss_count = 0;
+		size_t overlapping_channel_bss_count = 0;
 	};
 
 	struct wifi_interface_report {

@@ -283,6 +283,29 @@ namespace netcure::checkers {
 			return "unknown";
 		}
 
+		uint32_t _effective_channel_width_mhz(const std::optional<uint32_t>& width_mhz) {
+			return width_mhz.value_or(20u);
+		}
+
+		bool _channels_overlap(
+			const std::optional<uint32_t>& lhs_center_frequency_mhz,
+			const std::optional<uint32_t>& lhs_width_mhz,
+			const std::optional<uint32_t>& rhs_center_frequency_mhz,
+			const std::optional<uint32_t>& rhs_width_mhz
+		) {
+			if (!lhs_center_frequency_mhz.has_value() || !rhs_center_frequency_mhz.has_value()) {
+				return false;
+			}
+
+			const auto lhs_half_width = static_cast<int32_t>(_effective_channel_width_mhz(lhs_width_mhz) / 2);
+			const auto rhs_half_width = static_cast<int32_t>(_effective_channel_width_mhz(rhs_width_mhz) / 2);
+			const auto lhs_lower = static_cast<int32_t>(*lhs_center_frequency_mhz) - lhs_half_width;
+			const auto lhs_upper = static_cast<int32_t>(*lhs_center_frequency_mhz) + lhs_half_width;
+			const auto rhs_lower = static_cast<int32_t>(*rhs_center_frequency_mhz) - rhs_half_width;
+			const auto rhs_upper = static_cast<int32_t>(*rhs_center_frequency_mhz) + rhs_half_width;
+			return lhs_lower < rhs_upper && rhs_lower < lhs_upper;
+		}
+
 		std::optional<uint32_t> _parse_channel_width_mhz(const WLAN_BSS_ENTRY& entry) {
 			if (entry.ulIeSize == 0) {
 				return std::nullopt;
@@ -632,6 +655,9 @@ namespace netcure::checkers {
 				}));
 
 				if (report.connection.connected && report.connection.channel.has_value()) {
+					const auto connection_band = report.connection.center_frequency_mhz.has_value()
+						? _band_from_frequency(*report.connection.center_frequency_mhz)
+						: std::string("unknown");
 					for (const auto& network : report.nearby_networks) {
 						if (network.connected || !network.channel.has_value()) {
 							continue;
@@ -642,11 +668,16 @@ namespace netcure::checkers {
 							continue;
 						}
 
-						if (network.band == "2.4 GHz" && *report.connection.channel <= 14) {
-							const auto channel_gap = static_cast<int>(*network.channel) - static_cast<int>(*report.connection.channel);
-							if (std::abs(channel_gap) <= 4) {
-								++report.connection.adjacent_channel_bss_count;
-							}
+						if (
+							network.band == connection_band &&
+							_channels_overlap(
+								report.connection.center_frequency_mhz,
+								report.connection.channel_width_mhz,
+								network.center_frequency_mhz,
+								network.channel_width_mhz
+							)
+						) {
+							++report.connection.overlapping_channel_bss_count;
 						}
 					}
 				}
@@ -688,26 +719,28 @@ namespace netcure::checkers {
 						});
 					}
 
-					if (report.connection.same_channel_bss_count >= 3 || report.connection.adjacent_channel_bss_count >= 5) {
+					if (report.connection.same_channel_bss_count >= 3 || report.connection.overlapping_channel_bss_count >= 5) {
 						ctx.result.messages.emplace_back(checker_message{
 							.level = severity::warning,
 							.title = std::format("High Wi-Fi channel interference: {}", report.interface_name),
 							.description = std::format(
-								"Connected channel {} has {} same-channel BSS and {} overlapping adjacent-channel BSS nearby. Co-channel contention and adjacent-channel interference are likely.",
+								"Connected channel {} ({} MHz) has {} same-channel BSS and {} overlapping BSS nearby when channel width is considered. Co-channel contention and spectral overlap are likely.",
 								report.connection.channel.value_or(0),
+								report.connection.channel_width_mhz.value_or(20),
 								report.connection.same_channel_bss_count,
-								report.connection.adjacent_channel_bss_count
+								report.connection.overlapping_channel_bss_count
 							)
 						});
-					} else if (report.connection.same_channel_bss_count > 0 || report.connection.adjacent_channel_bss_count > 0) {
+					} else if (report.connection.same_channel_bss_count > 0 || report.connection.overlapping_channel_bss_count > 0) {
 						ctx.result.messages.emplace_back(checker_message{
 							.level = severity::info,
 							.title = std::format("Nearby Wi-Fi contention detected: {}", report.interface_name),
 							.description = std::format(
-								"Connected channel {} has {} same-channel BSS and {} overlapping adjacent-channel BSS nearby.",
+								"Connected channel {} ({} MHz) has {} same-channel BSS and {} overlapping BSS nearby when channel width is considered.",
 								report.connection.channel.value_or(0),
+								report.connection.channel_width_mhz.value_or(20),
 								report.connection.same_channel_bss_count,
-								report.connection.adjacent_channel_bss_count
+								report.connection.overlapping_channel_bss_count
 							)
 						});
 					}
