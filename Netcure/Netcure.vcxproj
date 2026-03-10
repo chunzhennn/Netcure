@@ -105,6 +105,7 @@
   <ItemGroup>
     <ClInclude Include="checkers\adapter_checker.h" />
     <ClInclude Include="checkers\checker.h" />
+    <ClInclude Include="checkers\ping_checker.h" />
     <ClInclude Include="checkers\proxy_checker.h" />
     <ClInclude Include="checkers\route_checker.h" />
     <ClInclude Include="checkers\wifi_checker.h" />
@@ -113,6 +114,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="checkers\adapter_checker.cpp" />
+    <ClCompile Include="checkers\ping_checker.cpp" />
     <ClCompile Include="checkers\proxy_checker.cpp" />
     <ClCompile Include="checkers\route_checker.cpp" />
     <ClCompile Include="checkers\wifi_checker.cpp" />

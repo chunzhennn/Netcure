@@ -82,12 +82,41 @@ namespace netcure::checkers {
 		std::vector<wifi_network_info> nearby_networks;
 	};
 
+	struct ping_attempt_report {
+		uint32_t sequence = 0;
+		bool success = false;
+		bool timed_out = false;
+		std::optional<uint32_t> rtt_ms;
+		uint32_t status_code = 0;
+		std::string status;
+	};
+
+	struct ping_target_report {
+		std::string category;
+		std::string target_name;
+		std::string address;
+		uint32_t attempts = 0;
+		uint32_t timeout_ms = 0;
+		uint32_t interval_ms = 0;
+		uint32_t replies = 0;
+		uint32_t losses = 0;
+		uint32_t timeout_count = 0;
+		double loss_rate = 0.0;
+		std::optional<uint32_t> min_rtt_ms;
+		std::optional<uint32_t> max_rtt_ms;
+		std::optional<double> avg_rtt_ms;
+		std::optional<double> jitter_ms;
+		std::string last_error;
+		std::vector<ping_attempt_report> attempt_details;
+	};
+
 	struct checker_result {
 		std::vector<utils::network_interface> network_interfaces;
 		std::vector<checker_message> messages;
 		std::vector<utils::route_entry<utils::ipv4_addr>> route4_table;
 		std::vector<utils::route_entry<utils::ipv6_addr>> route6_table;
-      std::vector<wifi_interface_report> wifi_interfaces;
+       std::vector<wifi_interface_report> wifi_interfaces;
+		std::vector<ping_target_report> ping_targets;
 	};
 
 	struct checker_context {
