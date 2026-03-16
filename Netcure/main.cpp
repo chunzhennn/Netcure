@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "checkers/adapter_checker.h"
+#include "checkers/environment_checker.h"
 #include "checkers/wifi_checker.h"
 #include "checkers/route_checker.h"
 #include "checkers/ping_checker.h"
@@ -10,9 +11,13 @@ using namespace netcure::checkers;
 int main()
 {
     SetConsoleOutputCP(CP_UTF8);
-    const auto result = run_checkers<adapter_checker, wifi_checker, route_checker, ping_checker, proxy_checker>();
+    const auto result = run_checkers<adapter_checker, environment_checker, wifi_checker, route_checker, ping_checker, proxy_checker>();
+    std::cout << "Generating report JSON..." << std::endl;
+    const auto report_json = netcure::report::build_report_json(result);
+    const auto report_json_path = netcure::report::write_report_json(report_json);
+    std::cout << "Generated JSON report: " << report_json_path.string() << std::endl;
     std::cout << "Generating HTML report..." << std::endl;
-    const auto report_path = netcure::report::write_html_report(result);
+    const auto report_path = netcure::report::write_html_report(report_json);
     std::cout << "Generated report: " << report_path.string() << std::endl;
     std::cout << "Opening report in your default browser..." << std::endl;
     if (!netcure::report::open_report_in_browser(report_path)) {

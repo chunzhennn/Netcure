@@ -114,13 +114,26 @@ namespace netcure::checkers {
 		std::vector<ping_attempt_report> attempt_details;
 	};
 
+	struct host_environment_report {
+		std::string computer_name;
+		std::string system_manufacturer;
+		std::string system_model;
+		std::string os_name;
+		std::string os_version;
+		std::string os_build;
+		std::string os_display_version;
+		std::string architecture;
+		std::vector<std::string> network_adapter_models;
+	};
+
 	struct checker_result {
 		std::vector<utils::network_interface> network_interfaces;
 		std::vector<checker_message> messages;
 		std::vector<utils::route_entry<utils::ipv4_addr>> route4_table;
 		std::vector<utils::route_entry<utils::ipv6_addr>> route6_table;
-       std::vector<wifi_interface_report> wifi_interfaces;
+		std::vector<wifi_interface_report> wifi_interfaces;
 		std::vector<ping_target_report> ping_targets;
+		host_environment_report host_environment;
 	};
 
 	struct checker_context {

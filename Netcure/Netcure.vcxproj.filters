@@ -21,6 +21,9 @@
     <ClInclude Include="checkers\checker.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="checkers\environment_checker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="checkers\adapter_checker.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -42,6 +45,9 @@
     <ClInclude Include="report\html_report.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -51,6 +57,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="checkers\adapter_checker.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="checkers\environment_checker.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="utils.cpp">
@@ -73,8 +82,27 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ResourceCompile Include="Netcure.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
     <None Include="PropertySheet.props" />
     <None Include="packages.config" />
+    <None Include="..\frontend\index.html" />
+    <None Include="..\frontend\package.json" />
+    <None Include="..\frontend\package-lock.json" />
+    <None Include="..\frontend\scripts\build-frontend.ps1" />
+    <None Include="..\frontend\src\App.vue" />
+    <None Include="..\frontend\src\components\MetricTile.vue" />
+    <None Include="..\frontend\src\components\SectionPanel.vue" />
+    <None Include="..\frontend\src\components\SeverityPill.vue" />
+    <None Include="..\frontend\src\components\WifiChannelChart.vue" />
+    <None Include="..\frontend\src\main.ts" />
+    <None Include="..\frontend\src\report.ts" />
+    <None Include="..\frontend\src\styles.css" />
+    <None Include="..\frontend\src\types.ts" />
+    <None Include="..\frontend\src\vite-env.d.ts" />
+    <None Include="..\frontend\tsconfig.json" />
+    <None Include="..\frontend\vite.config.ts" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="readme.txt" />

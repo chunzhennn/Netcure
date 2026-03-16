@@ -34,7 +34,7 @@
   </ItemGroup>
   <PropertyGroup Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)' == '16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)' == '15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)' == '14.0'">v140</PlatformToolset>
@@ -61,6 +61,10 @@
     <Import Project="PropertySheet.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <NetcureFrontendDir>$(SolutionDir)frontend</NetcureFrontendDir>
+    <NetcureFrontendDistDir>$(NetcureFrontendDir)\dist</NetcureFrontendDistDir>
+  </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -105,16 +109,19 @@
   <ItemGroup>
     <ClInclude Include="checkers\adapter_checker.h" />
     <ClInclude Include="checkers\checker.h" />
+    <ClInclude Include="checkers\environment_checker.h" />
     <ClInclude Include="checkers\ping_checker.h" />
     <ClInclude Include="checkers\proxy_checker.h" />
     <ClInclude Include="checkers\route_checker.h" />
     <ClInclude Include="checkers\wifi_checker.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="report\html_report.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="checkers\adapter_checker.cpp" />
+    <ClCompile Include="checkers\environment_checker.cpp" />
     <ClCompile Include="checkers\ping_checker.cpp" />
     <ClCompile Include="checkers\proxy_checker.cpp" />
     <ClCompile Include="checkers\route_checker.cpp" />
@@ -127,16 +134,52 @@
     <ClCompile Include="utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ResourceCompile Include="Netcure.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\frontend\index.html" />
+    <None Include="..\frontend\package.json" />
+    <None Include="..\frontend\package-lock.json" Condition="Exists('..\frontend\package-lock.json')" />
+    <None Include="..\frontend\scripts\build-frontend.ps1" />
+    <None Include="..\frontend\src\App.vue" />
+    <None Include="..\frontend\src\components\MetricTile.vue" />
+    <None Include="..\frontend\src\components\SectionPanel.vue" />
+    <None Include="..\frontend\src\components\SeverityPill.vue" />
+    <None Include="..\frontend\src\components\WifiChannelChart.vue" />
+    <None Include="..\frontend\src\main.ts" />
+    <None Include="..\frontend\src\report.ts" />
+    <None Include="..\frontend\src\styles.css" />
+    <None Include="..\frontend\src\types.ts" />
+    <None Include="..\frontend\src\vite-env.d.ts" />
+    <None Include="..\frontend\tsconfig.json" />
+    <None Include="..\frontend\vite.config.ts" />
     <None Include="packages.config" />
     <None Include="PropertySheet.props" />
     <Text Include="readme.txt">
       <DeploymentContent>false</DeploymentContent>
     </Text>
   </ItemGroup>
+  <ItemGroup>
+    <NetcureFrontendSource Include="..\frontend\index.html" />
+    <NetcureFrontendSource Include="..\frontend\package.json" />
+    <NetcureFrontendSource Include="..\frontend\package-lock.json" Condition="Exists('..\frontend\package-lock.json')" />
+    <NetcureFrontendSource Include="..\frontend\scripts\build-frontend.ps1" />
+    <NetcureFrontendSource Include="..\frontend\src\**\*" />
+    <NetcureFrontendSource Include="..\frontend\tsconfig.json" />
+    <NetcureFrontendSource Include="..\frontend\vite.config.ts" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="..\packages\Microsoft.Windows.CppWinRT.2.0.220531.1\build\native\Microsoft.Windows.CppWinRT.targets" Condition="Exists('..\packages\Microsoft.Windows.CppWinRT.2.0.220531.1\build\native\Microsoft.Windows.CppWinRT.targets')" />
   </ImportGroup>
+  <Target
+    Name="BuildFrontend"
+    BeforeTargets="ResourceCompile"
+    Inputs="@(NetcureFrontendSource)"
+    Outputs="$(NetcureFrontendDistDir)\index.html;$(NetcureFrontendDistDir)\assets\report-app.js;$(NetcureFrontendDistDir)\assets\report-app.css">
+    <Message Text="Building embedded Netcure frontend..." Importance="High" />
+    <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(NetcureFrontendDir)\scripts\build-frontend.ps1&quot;" />
+  </Target>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>这台计算机上缺少此项目引用的 NuGet 程序包。使用“NuGet 程序包还原”可下载这些程序包。有关更多信息，请参见 http://go.microsoft.com/fwlink/?LinkID=322105。缺少的文件是 {0}。</ErrorText>

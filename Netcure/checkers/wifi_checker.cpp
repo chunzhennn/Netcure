@@ -29,6 +29,8 @@
 namespace netcure::checkers {
 	namespace {
 		constexpr auto wlan_scan_wait_timeout = std::chrono::seconds(10);
+		constexpr auto wlan_result_poll_interval = std::chrono::milliseconds(1200);
+		constexpr int wlan_result_poll_attempts = 3;
 
 		struct wlan_handle_deleter {
 			void operator()(HANDLE handle) const {
@@ -93,9 +95,9 @@ namespace netcure::checkers {
 			std::string result;
 			result.reserve(ssid.uSSIDLength);
 			for (ULONG i = 0; i < ssid.uSSIDLength; ++i) {
-				const auto ch = static_cast<char>(ssid.ucSSID[i]);
-				if (std::isprint(static_cast<unsigned char>(ch)) != 0) {
-					result.push_back(ch);
+				const auto ch = static_cast<unsigned char>(ssid.ucSSID[i]);
+				if (ch >= 0x80 || std::isprint(ch) != 0) {
+					result.push_back(static_cast<char>(ch));
 				} else {
 					return std::format("<non-printable:{} bytes>", ssid.uSSIDLength);
 				}
@@ -496,6 +498,44 @@ namespace netcure::checkers {
 			return { true, wait_context.completed && wait_context.result == ERROR_SUCCESS };
 		}
 
+		unique_wlan_memory<WLAN_AVAILABLE_NETWORK_LIST> _get_available_networks_with_retry(HANDLE handle, const GUID& interface_guid) {
+			unique_wlan_memory<WLAN_AVAILABLE_NETWORK_LIST> networks;
+			for (int attempt = 0; attempt < wlan_result_poll_attempts; ++attempt) {
+				networks = _get_available_networks(handle, interface_guid);
+				if (networks != nullptr && networks->dwNumberOfItems > 0) {
+					return networks;
+				}
+
+				if (attempt + 1 < wlan_result_poll_attempts) {
+					std::this_thread::sleep_for(wlan_result_poll_interval);
+				}
+			}
+
+			return networks;
+		}
+
+		unique_wlan_memory<WLAN_BSS_LIST> _try_get_bss_list_with_retry(HANDLE handle, const GUID& interface_guid) {
+			for (int attempt = 0; attempt < wlan_result_poll_attempts; ++attempt) {
+				try {
+					auto bss_list = _get_bss_list(handle, interface_guid);
+					if (bss_list != nullptr && bss_list->dwNumberOfItems > 0) {
+						return bss_list;
+					}
+				}
+				catch (...) {
+					if (attempt + 1 == wlan_result_poll_attempts) {
+						return {};
+					}
+				}
+
+				if (attempt + 1 < wlan_result_poll_attempts) {
+					std::this_thread::sleep_for(wlan_result_poll_interval);
+				}
+			}
+
+			return {};
+		}
+
 		std::string _resolve_interface_name(const checker_context& ctx, const if_id_type& interface_id, const std::string& fallback_name) {
 			for (const auto& iface : ctx.result.network_interfaces) {
 				if (_same_luid(iface.id, interface_id)) {
@@ -545,7 +585,7 @@ namespace netcure::checkers {
 				report.scan_requested = scan.requested;
 				report.scan_completed = scan.completed;
 
-				auto available_networks = _get_available_networks(handle.get(), info.InterfaceGuid);
+				auto available_networks = _get_available_networks_with_retry(handle.get(), info.InterfaceGuid);
 				std::unordered_map<std::string, available_network_snapshot> available_network_map;
 				for (DWORD network_index = 0; network_index < available_networks->dwNumberOfItems; ++network_index) {
 					const auto& network = available_networks->Network[network_index];
@@ -612,38 +652,59 @@ namespace netcure::checkers {
 					report.connection.channel = static_cast<uint32_t>(*channel_number);
 				}
 
-				auto bss_list = _get_bss_list(handle.get(), info.InterfaceGuid);
-				for (DWORD bss_index = 0; bss_index < bss_list->dwNumberOfItems; ++bss_index) {
-					const auto& bss = bss_list->wlanBssEntries[bss_index];
-					wifi_network_info network{};
-					network.ssid = _ssid_to_string(bss.dot11Ssid);
-					network.bssid = _to_mac(bss.dot11Bssid, sizeof(bss.dot11Bssid));
-					network.phy_type = _phy_type_to_string(bss.dot11BssPhyType);
-					network.bss_type = _bss_type_to_string(bss.dot11BssType);
-					network.signal_quality = bss.uLinkQuality;
-					network.rssi_dbm = static_cast<int32_t>(bss.lRssi);
-					network.center_frequency_mhz = bss.ulChCenterFrequency / 1000;
-					network.band = _band_from_frequency(*network.center_frequency_mhz);
-					network.channel = _frequency_to_channel(*network.center_frequency_mhz);
-					network.channel_width_mhz = _parse_channel_width_mhz(bss);
-					network.connected = report.connection.connected && network.bssid == report.connection.bssid;
+				auto bss_list = _try_get_bss_list_with_retry(handle.get(), info.InterfaceGuid);
+				if (bss_list != nullptr && bss_list->dwNumberOfItems > 0) {
+					for (DWORD bss_index = 0; bss_index < bss_list->dwNumberOfItems; ++bss_index) {
+						const auto& bss = bss_list->wlanBssEntries[bss_index];
+						wifi_network_info network{};
+						network.ssid = _ssid_to_string(bss.dot11Ssid);
+						network.bssid = _to_mac(bss.dot11Bssid, sizeof(bss.dot11Bssid));
+						network.phy_type = _phy_type_to_string(bss.dot11BssPhyType);
+						network.bss_type = _bss_type_to_string(bss.dot11BssType);
+						network.signal_quality = bss.uLinkQuality;
+						network.rssi_dbm = static_cast<int32_t>(bss.lRssi);
+						network.center_frequency_mhz = bss.ulChCenterFrequency / 1000;
+						network.band = _band_from_frequency(*network.center_frequency_mhz);
+						network.channel = _frequency_to_channel(*network.center_frequency_mhz);
+						network.channel_width_mhz = _parse_channel_width_mhz(bss);
+						network.connected = report.connection.connected && network.bssid == report.connection.bssid;
 
-					const auto available_it = available_network_map.find(network.ssid);
-					if (available_it != available_network_map.end()) {
-						network.profile_name = available_it->second.profile_name;
-						network.security_enabled = available_it->second.security_enabled;
-						network.connectable = available_it->second.connectable;
-						network.auth_algorithm = available_it->second.auth_algorithm;
-						network.cipher_algorithm = available_it->second.cipher_algorithm;
+						const auto available_it = available_network_map.find(network.ssid);
+						if (available_it != available_network_map.end()) {
+							network.profile_name = available_it->second.profile_name;
+							network.security_enabled = available_it->second.security_enabled;
+							network.connectable = available_it->second.connectable;
+							network.auth_algorithm = available_it->second.auth_algorithm;
+							network.cipher_algorithm = available_it->second.cipher_algorithm;
+						}
+
+						if (network.connected) {
+							report.connection.center_frequency_mhz = network.center_frequency_mhz;
+							report.connection.channel = network.channel;
+							report.connection.channel_width_mhz = network.channel_width_mhz;
+						}
+
+						report.nearby_networks.emplace_back(std::move(network));
 					}
-
-					if (network.connected) {
-						report.connection.center_frequency_mhz = network.center_frequency_mhz;
-						report.connection.channel = network.channel;
-						report.connection.channel_width_mhz = network.channel_width_mhz;
+				}
+				else {
+					for (DWORD network_index = 0; network_index < available_networks->dwNumberOfItems; ++network_index) {
+						const auto& network_entry = available_networks->Network[network_index];
+						wifi_network_info network{};
+						network.ssid = _ssid_to_string(network_entry.dot11Ssid);
+						network.profile_name = _wide_to_string(network_entry.strProfileName);
+						network.phy_type = _phy_type_to_string(network_entry.dot11PhyTypes[0]);
+						network.bss_type = _bss_type_to_string(network_entry.dot11BssType);
+						network.auth_algorithm = _auth_algorithm_to_string(network_entry.dot11DefaultAuthAlgorithm);
+						network.cipher_algorithm = _cipher_algorithm_to_string(network_entry.dot11DefaultCipherAlgorithm);
+						network.band = "unknown";
+						network.security_enabled = network_entry.bSecurityEnabled != FALSE;
+						network.connectable = network_entry.bNetworkConnectable != FALSE;
+						network.connected = false;
+						network.signal_quality = network_entry.wlanSignalQuality;
+						network.rssi_dbm = _estimate_rssi_from_quality(network.signal_quality);
+						report.nearby_networks.emplace_back(std::move(network));
 					}
-
-					report.nearby_networks.emplace_back(std::move(network));
 				}
 
 				std::sort(report.nearby_networks.begin(), report.nearby_networks.end(), [](const auto& lhs, const auto& rhs) {
@@ -759,6 +820,14 @@ namespace netcure::checkers {
 						.level = severity::info,
 						.title = std::format("Wi-Fi scan did not complete synchronously: {}", report.interface_name),
 						.description = "An active scan was requested, but completion was not confirmed within the wait window. Cached BSS information is still collected when available."
+					});
+				}
+
+				if (!report.connection.connected && report.connection.radio_on && report.nearby_networks.empty()) {
+					ctx.result.messages.emplace_back(checker_message{
+						.level = severity::warning,
+						.title = std::format("No nearby Wi-Fi networks were returned: {}", report.interface_name),
+						.description = "The wireless interface is present and the radio is on, but neither the BSS list nor the available network list returned nearby networks. Driver scan behavior or OS policy may be limiting disconnected scans."
 					});
 				}
 

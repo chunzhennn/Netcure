@@ -1,0 +1,5 @@
+#include "resource.h"
+
+IDR_NETCURE_FRONTEND_HTML RCDATA "..\\frontend\\dist\\index.html"
+IDR_NETCURE_FRONTEND_JS RCDATA "..\\frontend\\dist\\assets\\report-app.js"
+IDR_NETCURE_FRONTEND_CSS RCDATA "..\\frontend\\dist\\assets\\report-app.css"
