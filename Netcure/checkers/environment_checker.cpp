@@ -15,6 +15,12 @@
 
 namespace netcure::checkers {
 	namespace {
+		struct os_version_info {
+			DWORD major = 0;
+			DWORD minor = 0;
+			DWORD build = 0;
+		};
+
 		using rtl_get_version_fn = LONG (WINAPI*)(PRTL_OSVERSIONINFOW);
 
 		std::string read_registry_string(const HKEY root, const wchar_t* sub_key, const wchar_t* value_name) {
@@ -78,24 +84,52 @@ namespace netcure::checkers {
 			}
 		}
 
-		std::string get_os_version_text() {
+		std::optional<os_version_info> get_os_version_info() {
 			const auto ntdll = GetModuleHandleW(L"ntdll.dll");
 			if (ntdll == nullptr) {
-				return "";
+				return std::nullopt;
 			}
 
 			const auto rtl_get_version = reinterpret_cast<rtl_get_version_fn>(GetProcAddress(ntdll, "RtlGetVersion"));
 			if (rtl_get_version == nullptr) {
-				return "";
+				return std::nullopt;
 			}
 
 			RTL_OSVERSIONINFOW info{};
 			info.dwOSVersionInfoSize = sizeof(info);
 			if (rtl_get_version(&info) != 0) {
+				return std::nullopt;
+			}
+
+			return os_version_info{
+				.major = info.dwMajorVersion,
+				.minor = info.dwMinorVersion,
+				.build = info.dwBuildNumber
+			};
+		}
+
+		std::string get_os_version_text(const std::optional<os_version_info>& version_info) {
+			if (!version_info.has_value()) {
 				return "";
 			}
 
-			return std::format("{}.{}.{}", info.dwMajorVersion, info.dwMinorVersion, info.dwBuildNumber);
+			return std::format("{}.{}.{}", version_info->major, version_info->minor, version_info->build);
+		}
+
+		std::string normalize_windows_product_name(std::string product_name, const std::optional<os_version_info>& version_info) {
+			constexpr std::string_view windows_10_prefix = "Windows 10";
+			if (!version_info.has_value()) {
+				return product_name;
+			}
+
+			// Windows 11 still reports itself as NT 10.0, but client builds start at 22000.
+			if (version_info->major == 10 &&
+				version_info->build >= 22000 &&
+				product_name.rfind(windows_10_prefix, 0) == 0) {
+				product_name.replace(0, windows_10_prefix.size(), "Windows 11");
+			}
+
+			return product_name;
 		}
 
 		std::vector<std::string> get_network_adapter_models() {
@@ -146,11 +180,16 @@ namespace netcure::checkers {
 
 	void environment_checker::run(checker_context& ctx) {
 		auto& report = ctx.result.host_environment;
+		const auto os_version_info = get_os_version_info();
+
 		report.computer_name = get_computer_name();
 		report.system_manufacturer = read_registry_string(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\BIOS", L"SystemManufacturer");
 		report.system_model = read_registry_string(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\BIOS", L"SystemProductName");
-		report.os_name = read_registry_string(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", L"ProductName");
-		report.os_version = get_os_version_text();
+		report.os_name = normalize_windows_product_name(
+			read_registry_string(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", L"ProductName"),
+			os_version_info
+		);
+		report.os_version = get_os_version_text(os_version_info);
 		report.os_build = read_registry_string(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", L"CurrentBuildNumber");
 		report.os_display_version = read_registry_string(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", L"DisplayVersion");
 		if (report.os_display_version.empty()) {
